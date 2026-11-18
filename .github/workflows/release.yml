@@ -1,0 +1,94 @@
+# 비공개 소스 레포의 태그를 받아 cozzim 맥 바이너리(Apple Silicon + Intel universal)를 빌드하고,
+# 이 레포 Release에 올린 뒤 Formula/cozzim.rb의 주소 · sha256을 갱신한다.
+# publish=false면 빌드만 하고 결과를 artifact로 남긴다 (배포 전 점검용).
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: '소스 레포의 태그 (예: cozzim-v0.1.0). publish=false면 브랜치도 된다'
+        required: true
+      publish:
+        description: 'Release를 만들고 Formula를 갱신한다'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency: release
+
+jobs:
+  release:
+    runs-on: macos-latest
+    env:
+      REF: ${{ inputs.ref }}
+      PUBLISH: ${{ inputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 소스 받기 (읽기 전용 배포 키)
+        uses: actions/checkout@v4
+        with:
+          repository: coworkcity-team/co-zzim
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.COZZIM_SOURCE_KEY }}
+          path: src
+          persist-credentials: false
+
+      - name: 버전 정하기
+        id: version
+        run: |
+          version=$(grep -m1 '^version' src/cli/Cargo.toml | cut -d'"' -f2)
+          if [ "$PUBLISH" = "true" ] && [ "$REF" != "cozzim-v$version" ]; then
+            echo "배포는 태그 cozzim-v$version 으로만 해요 (받은 ref: $REF)" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: 빌드
+        working-directory: src/cli
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          cargo test
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          lipo -create -output "$GITHUB_WORKSPACE/dist/cozzim" \
+            target/aarch64-apple-darwin/release/cozzim \
+            target/x86_64-apple-darwin/release/cozzim
+
+      - name: 묶기
+        working-directory: dist
+        run: |
+          lipo -info cozzim
+          ./cozzim --version
+          tar -czf cozzim-macos.tar.gz cozzim
+          shasum -a 256 cozzim-macos.tar.gz | tee cozzim-macos.tar.gz.sha256
+
+      - name: 점검용 artifact
+        if: ${{ !inputs.publish }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cozzim-macos
+          path: dist/cozzim-macos.tar.gz
+
+      - name: Release 올리기 · Formula 갱신
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$REF" dist/cozzim-macos.tar.gz dist/cozzim-macos.tar.gz.sha256 \
+            --title "cozzim $VERSION" --notes "brew upgrade cozzim"
+          sha=$(cut -d' ' -f1 dist/cozzim-macos.tar.gz.sha256)
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${REF}/cozzim-macos.tar.gz"
+          sed -i '' -e "s|^  url \".*\"|  url \"$url\"|" \
+                    -e "s|^  sha256 \".*\"|  sha256 \"$sha\"|" \
+                    -e "s|^  version \".*\"|  version \"$VERSION\"|" Formula/cozzim.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/cozzim.rb
+          git commit -m "cozzim $VERSION"
+          git push
