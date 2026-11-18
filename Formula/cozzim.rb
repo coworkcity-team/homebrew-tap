@@ -2,9 +2,9 @@
 class Cozzim < Formula
   desc "Book Cozzim meeting rooms from the terminal"
   homepage "https://coworkcity-cozzim.vercel.app"
-  url "https://github.com/coworkcity-team/homebrew-tap/releases/download/cozzim-v0.2.0/cozzim-macos.tar.gz"
-  sha256 "48201fcd6bebea2740a9e55b889eb5be1a1ce44188636c1479a16e24eafd865f"
-  version "0.2.0"
+  url "https://github.com/coworkcity-team/homebrew-tap/releases/download/cozzim-v0.2.1/cozzim-macos.tar.gz"
+  sha256 "1d28be89941b0995e8995a3aa0ec1f1e9e65329078f58b25a0f4da51005f2e08"
+  version "0.2.1"
 
   depends_on :macos
 
