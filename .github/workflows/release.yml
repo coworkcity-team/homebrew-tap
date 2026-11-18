@@ -26,10 +26,10 @@ jobs:
       REF: ${{ inputs.ref }}
       PUBLISH: ${{ inputs.publish }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 소스 받기 (읽기 전용 배포 키)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: coworkcity-team/co-zzim
           ref: ${{ inputs.ref }}
@@ -69,7 +69,7 @@ jobs:
 
       - name: 점검용 artifact
         if: ${{ !inputs.publish }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cozzim-macos
           path: dist/cozzim-macos.tar.gz
